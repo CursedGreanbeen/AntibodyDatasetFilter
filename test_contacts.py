@@ -21,6 +21,23 @@ def display(value: object) -> str:
     return "-" if value is None else str(value)
 
 
+def get_polymer_chain_ids(structure) -> set[str]:
+    """Возвращает chain ID цепей с полимерным содержимым."""
+    if len(structure) == 0:
+        return set()
+
+    model = structure[0]
+    polymer_chain_ids: set[str] = set()
+
+    for chain in model:
+        polymer = chain.get_polymer()
+
+        if len(polymer) > 0:
+            polymer_chain_ids.add(chain.name)
+
+    return polymer_chain_ids
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Тестовый расчёт межцепочечных контактов"
@@ -75,18 +92,18 @@ def main() -> None:
         cutoff=args.cutoff,
     )
 
+    polymer_chain_ids = get_polymer_chain_ids(structure)
     filter_result = classify_complex(
         annotations=annotations,
         contacts=contacts,
+        other_polymer_chain_ids=polymer_chain_ids,
     )
 
-    print()
-    print("Классификация:")
+    print("\nКлассификация:")
     for key, value in filter_result.as_dict().items():
         print(f"  {key}: {value}")
 
-    print()
-    print(f"Контакты, cutoff = {args.cutoff:.1f} A:")
+    print(f"\nКонтакты, cutoff = {args.cutoff:.1f} A:")
     print(
         "chain_a\trole_a\tchain_b\trole_b\t"
         "atom_contacts\tresidue_contacts_a\t"

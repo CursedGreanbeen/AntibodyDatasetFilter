@@ -117,8 +117,13 @@ def _has_sufficient_contacts(
 def classify_complex(
     annotations: list[dict],
     contacts: Iterable[ContactMetrics],
-    minimum_pair_atom_contacts: int = MIN_ANTIBODY_ATOM_CONTACTS,
-    minimum_interface_atom_contacts: int = MIN_INTERFACE_ATOM_CONTACTS
+    other_polymer_chain_ids: set[str] | None = None,
+    minimum_pair_atom_contacts: int = (
+        MIN_ANTIBODY_ATOM_CONTACTS
+    ),
+    minimum_interface_atom_contacts: int = (
+        MIN_INTERFACE_ATOM_CONTACTS
+    ),
 ) -> FilterResult:
     """
     Классифицирует один комплекс.
@@ -126,6 +131,9 @@ def classify_complex(
     `annotations` должны быть результатом annotate_fasta().
     `contacts` должны быть результатом calculate_contacts().
     """
+    if other_polymer_chain_ids is None:
+        other_polymer_chain_ids = set()
+        
     contacts = list(contacts)
     roles = _roles_by_chain(annotations)
     annotation_by_chain = _annotation_by_chain(annotations)
@@ -248,7 +256,14 @@ def classify_complex(
     result.antigen_contacts = antigen_contacts
 
     if not antigen_chains:
-        result.reasons.append("no_antigen_interface")
+        if unknown_contact_chains:
+            # Контакт есть, но цепь не удалось аннотировать через FASTA.
+            # Причина unknown_contact_chain уже будет добавлена ниже.
+            pass
+        elif not other_polymer_chain_ids:
+            result.reasons.append("no_other_polymer_chain")
+        else:
+            result.reasons.append("no_antigen_interface")
 
     if len(antigen_chains) > 1:
         result.reasons.append("multiple_antigen_chains")
@@ -265,7 +280,10 @@ def classify_complex(
         result.classification = "strict"
         return result
 
-    if "no_antigen_interface" in result.reasons:
+    if (
+        "no_antigen_interface" in result.reasons
+        or "no_other_polymer_chain" in result.reasons
+    ):
         result.classification = "reject"
     else:
         result.classification = "candidate"
