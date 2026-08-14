@@ -30,6 +30,24 @@ def read_structure(cif_path: Path) -> gemmi.Structure:
     return structure
 
 
+def get_model_chains(
+    structure: gemmi.Structure,
+) -> list[ChainInfo]:
+    """Возвращает информацию обо всех непустых полимерных цепях."""
+    if len(structure) == 0:
+        raise ValueError("Структура не содержит моделей")
+
+    chains: list[ChainInfo] = []
+
+    for chain in structure[0]:
+        chain_info = get_chain_info(chain)
+
+        if chain_info is not None:
+            chains.append(chain_info)
+
+    return chains
+
+
 def get_polymer_residues(chain: gemmi.Chain) -> list[gemmi.Residue]:
     """
     Возвращает остатки полимера, имеющие хотя бы один атом.
@@ -77,17 +95,10 @@ def get_chain_info(chain: gemmi.Chain) -> ChainInfo | None:
     )
 
 
-def get_structure_chains(cif_path: Path) -> list[ChainInfo]:
-    """Возвращает информацию обо всех полимерных цепях первой модели."""
+def get_structure_chains(
+    cif_path: Path,
+) -> list[ChainInfo]:
+    """Загружает CIF и возвращает информацию о полимерных цепях."""
     structure = read_structure(cif_path)
-    model = structure[0]
 
-    chains = []
-
-    for chain in model:
-        chain_info = get_chain_info(chain)
-
-        if chain_info is not None:
-            chains.append(chain_info)
-
-    return chains
+    return get_model_chains(structure)

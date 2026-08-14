@@ -34,7 +34,7 @@ def extract_chain_ids(header: str) -> list[str]:
     auth_chains = []
 
     def _resolve_auth(entry: str) -> str | None:
-        auth_match = re.search(r'\[auth\s*([A-Z])\]', entry)
+        auth_match = re.search(r'\[auth\s*([A-Za-z])\]', entry)
         if auth_match:
             return auth_match.group(1)
         m = re.match(r'^([A-Z])', entry.strip())
@@ -65,7 +65,7 @@ def edit_fasta_header(header: str, chains_to_remove: set[str]) -> str:
     _DELETED = "__DELETE_RECORD__"
 
     def _get_check_id(entry: str) -> str:
-        auth_match = re.search(r'\[auth\s*([A-Z])\]', entry)
+        auth_match = re.search(r'\[auth\s*([A-Za-z])\]', entry)
         if auth_match:
             return auth_match.group(1)
         m = re.match(r'^([A-Z])', entry.strip())

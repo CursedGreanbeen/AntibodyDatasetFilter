@@ -117,7 +117,7 @@ def _has_sufficient_contacts(
 def classify_complex(
     annotations: list[dict],
     contacts: Iterable[ContactMetrics],
-    other_polymer_chain_ids: set[str] | None = None,
+    polymer_chain_ids: set[str] | None = None,
     minimum_pair_atom_contacts: int = (
         MIN_ANTIBODY_ATOM_CONTACTS
     ),
@@ -131,8 +131,8 @@ def classify_complex(
     `annotations` должны быть результатом annotate_fasta().
     `contacts` должны быть результатом calculate_contacts().
     """
-    if other_polymer_chain_ids is None:
-        other_polymer_chain_ids = set()
+    if polymer_chain_ids is None:
+        polymer_chain_ids = set()
         
     contacts = list(contacts)
     roles = _roles_by_chain(annotations)
@@ -255,10 +255,12 @@ def classify_complex(
     )
     result.antigen_contacts = antigen_contacts
 
+    other_polymer_chain_ids = (
+        polymer_chain_ids - antibody_chain_ids
+    )
+    
     if not antigen_chains:
         if unknown_contact_chains:
-            # Контакт есть, но цепь не удалось аннотировать через FASTA.
-            # Причина unknown_contact_chain уже будет добавлена ниже.
             pass
         elif not other_polymer_chain_ids:
             result.reasons.append("no_other_polymer_chain")
