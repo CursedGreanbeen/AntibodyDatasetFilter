@@ -12,38 +12,31 @@ import gemmi
 
 from antibody_dataset.annotation import annotate_fasta
 from antibody_dataset.contacts import calculate_contacts
-from antibody_dataset.filtering import classify_complex
-
-
-def get_polymer_chain_ids(
-    structure: gemmi.Structure,
-) -> set[str]:
-    """Returns polymer chain IDs."""
-    if len(structure) == 0:
-        return set()
-
-    model = structure[0]
-    polymer_chain_ids: set[str] = set()
-
-    for chain in model:
-        polymer = chain.get_polymer()
-
-        if len(polymer) > 0:
-            polymer_chain_ids.add(chain.name)
-
-    return polymer_chain_ids
+from antibody_dataset.filtering import classify_complex, find_antibody_pairs
+from antibody_dataset.repeats import detect_repeated_units
+from antibody_dataset.chains import get_model_chains, read_structure
+from antibody_dataset.repeats import detect_repeated_units
 
 
 def find_fasta(
     fasta_dir: Path,
     structure_path: Path,
 ) -> Path | None:
-    """Looks for FASTA with the same stem as CIF."""
+    """Looks for FASTA with the same stem as CIF.
+
+    If structure has _1 or _2 suffix, also tries base name.
+    """
+    stem = structure_path.stem
+
+    # Try exact stem first
     candidates = [
-        fasta_dir / f"{structure_path.stem}.fasta",
-        fasta_dir / f"{structure_path.stem}.fa",
-        fasta_dir / f"{structure_path.stem}.faa",
+        fasta_dir / f"{stem}.fasta",
     ]
+
+    # If stem has _1 or _2 suffix, also try base name
+    if "_" in stem:
+        base_name = stem.rsplit("_", 1)[0]
+        candidates.append(fasta_dir / f"{base_name}.fasta")
 
     for candidate in candidates:
         if candidate.is_file():
@@ -58,18 +51,35 @@ def process_structure(
     cutoff: float,
 ) -> dict:
     """Processes one CIF/FASTA pair."""
-    structure = gemmi.read_structure(str(structure_path))
+    structure = read_structure(structure_path)
+    structure_chains = get_model_chains(structure)
+    polymer_chain_ids = {chain.chain_id for chain in structure_chains}
     annotations = annotate_fasta(fasta_path)
 
     contacts = calculate_contacts(
         structure=structure,
+        polymer_chain_ids=polymer_chain_ids,
         annotations=annotations,
         cutoff=cutoff,
     )
 
-    filter_result = classify_complex(
+    antibody_pairs = find_antibody_pairs(
+        contacts=contacts,
+    )
+
+    repeat_analysis = detect_repeated_units(
         annotations=annotations,
         contacts=contacts,
+        antibody_pairs=antibody_pairs,
+        polymer_chain_ids=polymer_chain_ids,
+    )
+
+    filter_result = classify_complex(
+        polymer_chain_ids=polymer_chain_ids,
+        annotations=annotations,
+        contacts=contacts,
+        antibody_pairs=antibody_pairs,
+        repeat_analysis=repeat_analysis,
     )
 
     row = filter_result.as_dict()

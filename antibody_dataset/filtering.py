@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Iterable
 
 from .contacts import ContactMetrics
+from .repeats import RepeatAnalysis, RepeatUnit
 
 
 ANTIBODY_ROLES = {"heavy", "light"}
@@ -38,6 +39,14 @@ class FilterResult:
         default_factory=list
     )
 
+    repeat_copy_count: int = 0
+    is_repeated_copy: bool = False
+    representative_heavy_chain: str | None = None
+    representative_light_chain: str | None = None
+    representative_antigen_chains: list[str] = field(
+        default_factory=list
+    )
+
     def as_dict(self) -> dict:
         """Преобразует результат в строковый словарь для отчёта."""
         return {
@@ -56,6 +65,11 @@ class FilterResult:
             "unknown_contact_chains": ",".join(
                 self.unknown_contact_chains
             ),
+            "repeat_copy_count": self.repeat_copy_count,
+            "is_repeated_copy": self.is_repeated_copy,
+            "representative_heavy_chain": (self.representative_heavy_chain or ""),
+            "representative_light_chain": (self.representative_light_chain or ""),
+            "representative_antigen_chains": ",".join(self.representative_antigen_chains),
         }
 
 
@@ -118,12 +132,10 @@ def classify_complex(
     annotations: list[dict],
     contacts: Iterable[ContactMetrics],
     polymer_chain_ids: set[str] | None = None,
-    minimum_pair_atom_contacts: int = (
-        MIN_ANTIBODY_ATOM_CONTACTS
-    ),
-    minimum_interface_atom_contacts: int = (
-        MIN_INTERFACE_ATOM_CONTACTS
-    ),
+    antibody_pairs: list[tuple[str, str, ContactMetrics]] | None = None,
+    repeat_analysis: RepeatAnalysis | None = None,
+    minimum_pair_atom_contacts: int = (MIN_ANTIBODY_ATOM_CONTACTS),
+    minimum_interface_atom_contacts: int = (MIN_INTERFACE_ATOM_CONTACTS),
 ) -> FilterResult:
     """
     Классифицирует один комплекс.
@@ -172,13 +184,13 @@ def classify_complex(
     if not heavy_chains or not light_chains:
         return result
 
-    antibody_pairs: list[tuple[str, str]] = []
-    antibody_contacts: list[ContactMetrics] = []
-
-    selected_pairs = find_antibody_pairs(
-    contacts=contacts,
-    minimum_atom_contacts=minimum_pair_atom_contacts,
-    )
+    if antibody_pairs is None:
+        selected_pairs = find_antibody_pairs(
+            contacts=contacts,
+            minimum_atom_contacts=minimum_pair_atom_contacts,
+        )
+    else:
+        selected_pairs = antibody_pairs
 
     antibody_pairs = [
         (heavy_id, light_id)
@@ -203,7 +215,38 @@ def classify_complex(
         result.reasons.append("no_heavy_light_interface")
         return result
 
+    if repeat_analysis is not None:
+        result.repeat_copy_count = repeat_analysis.copy_count
+        result.is_repeated_copy = (
+            repeat_analysis.is_repeated_copy
+        )
+        result.reasons.extend(repeat_analysis.reasons)
+
+        representative = (
+            repeat_analysis.representative_unit
+        )
+
+        if representative is not None:
+            result.representative_heavy_chain = (
+                representative.heavy_chain
+            )
+            result.representative_light_chain = (
+                representative.light_chain
+            )
+            result.representative_antigen_chains = list(
+                representative.antigen_chains
+            )
+
     if len(antibody_pairs) > 1:
+        if (
+            repeat_analysis is not None
+            and repeat_analysis.is_repeated_copy
+        ):
+            result.classification = (
+                "candidate_repeated_copy"
+            )
+            return result
+
         result.reasons.append("multiple_antibody_pairs")
         return result
 

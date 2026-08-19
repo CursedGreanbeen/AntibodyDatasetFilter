@@ -48,19 +48,39 @@ def get_model_chains(
     return chains
 
 
-def get_polymer_residues(chain: gemmi.Chain) -> list[gemmi.Residue]:
+def get_polymer_residues(
+    chain: gemmi.Chain,
+) -> list[gemmi.Residue]:
     """
-    Возвращает остатки полимера, имеющие хотя бы один атом.
+    Возвращает содержащие атомы аминокислотные остатки.
 
-    Метод get_polymer() исключает воду и неполимерные объекты.
+    Сначала используется Gemmi get_polymer(). Если CIF не содержит
+    entity-информации и get_polymer() возвращает пустой результат,
+    выполняется fallback по всем остаткам цепи.
     """
-    residues = []
+    polymer_residues = [
+        residue
+        for residue in chain.get_polymer()
+        if len(residue) > 0
+    ]
 
-    for residue in chain.get_polymer():
-        if len(residue) > 0:
-            residues.append(residue)
+    if polymer_residues:
+        return polymer_residues
 
-    return residues
+    fallback_residues = []
+
+    for residue in chain:
+        if len(residue) == 0:
+            continue
+
+        residue_info = gemmi.find_tabulated_residue(
+            residue.name
+        )
+
+        if residue_info.is_amino_acid():
+            fallback_residues.append(residue)
+
+    return fallback_residues
 
 
 def residue_to_info(residue: gemmi.Residue) -> ResidueInfo:
