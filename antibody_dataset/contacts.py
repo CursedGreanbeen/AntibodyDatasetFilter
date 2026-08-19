@@ -111,6 +111,7 @@ def canonical_pair(
 def calculate_contacts(
     structure: gemmi.Structure,
     annotations: list[dict],
+    polymer_chain_ids: set[str],
     cutoff: float = DEFAULT_CUTOFF,
     min_distance: float = 0.1,
 ) -> list[ContactMetrics]:
@@ -132,12 +133,16 @@ def calculate_contacts(
     model = structure[0]
     chain_roles = roles_by_chain(annotations)
 
-    antibody_chain_ids = {
+    annotated_antibody_chain_ids = {
         chain_id
         for chain_id, role in chain_roles.items()
         if role in ANTIBODY_ROLES
     }
 
+    antibody_chain_ids = (
+        annotated_antibody_chain_ids
+        & polymer_chain_ids
+    )
     if not antibody_chain_ids:
         return []
 
@@ -152,6 +157,9 @@ def calculate_contacts(
 
     for source_chain in model:
         source_id = source_chain.name
+
+        if source_id not in polymer_chain_ids:
+            continue
 
         if source_id not in antibody_chain_ids:
             continue
@@ -169,6 +177,9 @@ def calculate_contacts(
                 for neighbor in neighbors:
                     target_chain = model[neighbor.chain_idx]
                     target_id = target_chain.name
+
+                    if target_id not in polymer_chain_ids:
+                        continue
 
                     if target_id == source_id:
                         continue
